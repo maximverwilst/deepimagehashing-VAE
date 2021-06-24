@@ -16,9 +16,6 @@ import numpy as np
 
 
 def hook(query, base, label_q, label_b, at=1000):
-    #return .5
-    #label_q = tf.squeeze(tf.one_hot(label_q, 3, axis=-1))
-    #label_b = tf.squeeze(tf.one_hot(label_b, 3, axis=-1))
     return eval_cls_map(query, base, label_q, label_b, at)
 
 
@@ -37,24 +34,10 @@ def reconstruction_loss(pred, origin):
 @tf.function
 def divergent_loss(mean, logvar, eps):
   
-  #z = mean + logvar*eps
-  #logpz = tf.reduce_mean(log_normal_pdf(z, 0., 0.),axis = 1)
-  #logqz_x = tf.reduce_mean(log_normal_pdf(z, mean, logvar),axis = 1)
-  #return tf.reduce_mean(logpz - logqz_x)
-  
   logpx, dependence, information, dimwise_kl, analytical_cond_kl, marginal_entropies, joint_entropy = elbo_decomposition(mean, logvar, eps, 0.)
   return -(information + dimwise_kl + dependence)
-  """
-  kl_loss = 1 + logvar - tf.math.square(mean) - tf.math.exp(logvar)
-  kl_loss = tf.math.reduce_sum(kl_loss, axis=-1)
-  kl_loss *= -0.5
-  kl_loss = tf.math.reduce_mean(kl_loss)
-  return kl_loss"""
-  
-  
 
-
-def IWAE_KL(x, reconstruction_mu, latent_mu, latent_logsigma, z, tol):
+def GECO(x, reconstruction_mu, latent_mu, latent_logsigma, z, tol):
     
     log_p = tf.math.reduce_sum(tf.math.pow(reconstruction_mu - x, 2), axis = -1) - tol
     log_q = tf.math.reduce_sum(-0.5 * ((z - latent_mu)/tf.math.exp(latent_logsigma))**2 - latent_logsigma, axis=-1)
@@ -71,7 +54,7 @@ def IWAE_KL(x, reconstruction_mu, latent_mu, latent_logsigma, z, tol):
     return out
 
 def train_step(model: TBH, batch_data, bbn_dim, cbn_dim, batch_size, actor_opt: tf.optimizers.Optimizer,
-               critic_opt: tf.optimizers.Optimizer, divergence_opt: tf.optimizers.Optimizer, lambd, aggressive=False, binarytraining=False):
+               critic_opt: tf.optimizers.Optimizer, divergence_opt: tf.optimizers.Optimizer, lambd):
     random_binary = (tf.sign(tf.random.uniform([batch_size, bbn_dim]) - 0.5) + 1) / 2
     random_cont = tf.random.uniform([batch_size, cbn_dim])*0.+.5
 
@@ -83,17 +66,9 @@ def train_step(model: TBH, batch_data, bbn_dim, cbn_dim, batch_size, actor_opt: 
         
         mean, logvar = get_mean_logvar(model.encoder,batch_data[1])
         eps = model.encoder.eps
-        divergence_loss = divergent_loss(mean, logvar, eps)#/max(lambd*1e6,1)
+        divergence_loss = divergent_loss(mean, logvar, eps)
 
-        #preGECO
-        critic_loss = adv_loss(model_output[5], model_output[3])# + adv_loss(model_output[4], model_output[2])
-        #loss = reconstruction_loss(model_output[1], batch_data[1]) - \
-        #             adv_loss(model_output[5], model_output[3]) - \
-        #             adv_loss(model_output[4], model_output[2])
-
-      
-        
-        #GECO
+        critic_loss = adv_loss(model_output[5], model_output[3])
         
         fc_1 = model.encoder.fc_1(batch_data[1])
         cbn = model.encoder.fc_2_2(fc_1)
@@ -106,10 +81,10 @@ def train_step(model: TBH, batch_data, bbn_dim, cbn_dim, batch_size, actor_opt: 
         reconstruction_mu = model.encoder.reconstruction2(fc_2)
 
 
-        tol = 1100
+        tol = 2400
         constraint = tf.reduce_mean(tf.reduce_sum(tf.math.pow(reconstruction_mu - batch_data[1], 2), axis = 1) - tol)
 
-        KL_div = IWAE_KL(batch_data[1], reconstruction_mu, latent_mu, latent_logsigma, z, tol)
+        KL_div = GECO(batch_data[1], reconstruction_mu, latent_mu, latent_logsigma, z, tol)
 
         product = constraint*lambd
         loss = KL_div+ product
@@ -119,12 +94,10 @@ def train_step(model: TBH, batch_data, bbn_dim, cbn_dim, batch_size, actor_opt: 
 
         divergence_scope = model.encoder.fc_2_1.trainable_variables+model.encoder.fc_1.trainable_variables
         
-        critic_scope = model.dis_2.trainable_variables# + model.dis_1.trainable_variables
+        critic_scope = model.dis_2.trainable_variables
         
-        #GECO uses no critic
-        actor_gradient = actor_tape.gradient(loss, sources=actor_scope)#!loss
+        actor_gradient = actor_tape.gradient(loss, sources=actor_scope)
         divergence_gradient = divergence_tape.gradient(divergence_loss, sources=divergence_scope)
-        #divergence_gradient2 = divergence_tape2.gradient(divergence_loss2, sources=divergence_scope2)
         critic_gradient = critic_tape.gradient(critic_loss, sources=critic_scope)
         
         divergence_gradient = [(tf.clip_by_value(grad, -1.0, 1.0)) for grad in divergence_gradient]
@@ -133,9 +106,7 @@ def train_step(model: TBH, batch_data, bbn_dim, cbn_dim, batch_size, actor_opt: 
         actor_opt.apply_gradients(zip(actor_gradient, actor_scope))
         critic_opt.apply_gradients(zip(critic_gradient, critic_scope))
           
-    #constraint+ tol
-    #return model_output[0].numpy(), loss.numpy(), critic_loss.numpy(), divergence_loss.numpy(), 1.
-    return model_output[0].numpy(), constraint + tol, critic_loss.numpy(), divergence_loss.numpy(), constraint#divergence_loss.numpy(), constraint #divergence_loss2#.numpy() 
+    return model_output[0].numpy(), constraint + tol, critic_loss.numpy(), divergence_loss.numpy(), constraint
                                                        
 
 def test_step(model: TBH, batch_data):
@@ -145,24 +116,14 @@ def test_step(model: TBH, batch_data):
 
 
 def train(set_name, bbn_dim, cbn_dim, batch_size, middle_dim=1024, max_iter=1000000, continue_path=False, continue_step=0, warmup = False):
-    print("check")
     model = TBH(set_name, bbn_dim, cbn_dim, middle_dim)
     if continue_path != False:
       model2 = tf.keras.models.load_model(continue_path)
     
     data = Dataset(set_name=set_name, batch_size=batch_size, code_length=bbn_dim)
-
-    lr_schedule = tf.keras.optimizers.schedules.ExponentialDecay(
-        initial_learning_rate=1e-4,
-        decay_steps=5000,
-        decay_rate=0.65)
-    lr_schedule2 = tf.keras.optimizers.schedules.ExponentialDecay(
-        initial_learning_rate=1e-5,
-        decay_steps=5000,
-        decay_rate=0.65)
     
-    actor_opt = tf.keras.optimizers.Adam(1e-4)#COCOB(alpha=10000)
-    critic_opt = tf.keras.optimizers.Adam(1e-5)
+    actor_opt = tf.keras.optimizers.Adam(1e-4)
+    critic_opt = tf.keras.optimizers.Adam(1e-4)
     divergence_opt = tf.keras.optimizers.Adam(1e-8)
 
     train_iter = iter(data.train_data)
@@ -185,7 +146,6 @@ def train(set_name, bbn_dim, cbn_dim, batch_size, middle_dim=1024, max_iter=1000
     save_name = os.path.join(save_path)
     manager = tf.train.CheckpointManager(checkpoint, save_name, max_to_keep=1)
 
-    binarytraining = False
     best_actor = 9999.
     best_hook = 0
     lambd = 1.
@@ -195,7 +155,7 @@ def train(set_name, bbn_dim, cbn_dim, batch_size, middle_dim=1024, max_iter=1000
       with writer.as_default():
           train_batch = next(train_iter)
 
-          train_code, actor_loss, critic_loss, divergence_loss, constraint = train_step(model, train_batch, bbn_dim, cbn_dim, batch_size, actor_opt, critic_opt, divergence_opt, lambd, binarytraining = binarytraining)
+          train_code, actor_loss, critic_loss, divergence_loss, constraint = train_step(model, train_batch, bbn_dim, cbn_dim, batch_size, actor_opt, critic_opt, divergence_opt, lambd)
           
           train_label = train_batch[2].numpy()
           train_entry = train_batch[0].numpy()
@@ -217,27 +177,16 @@ def train(set_name, bbn_dim, cbn_dim, batch_size, middle_dim=1024, max_iter=1000
 
               test_batch = next(test_iter)
               train_hook = hook(train_code, train_code, train_label, train_label, at=min(batch_size, 1000))
-              """mean, logvar = get_mean_logvar(model.encoder,test_batch[1])
-              eps = model.encoder.eps
-              logpx, dependence, information, dimwise_kl, analytical_cond_kl, marginal_entropies, joint_entropy = elbo_decomposition(mean, logvar, eps,-actor_loss)
-
-              print('Estimated  ELBO: {}, Dependence: {}, Information: {}, Dimension-wise KL: {}, Analytical E_p(x)[ KL(q(z|x)||p(z)) ]: {}'.format(logpx - analytical_cond_kl, dependence, information, dimwise_kl, analytical_cond_kl))
-
-              tf.summary.scalar('test/elbo', logpx - analytical_cond_kl, step=i)
-              tf.summary.scalar('test/dependence', dependence, step=i)
-              tf.summary.scalar('test/information', information, step=i)
-              tf.summary.scalar('test/dimwise_kl', dimwise_kl, step=i)
-              tf.summary.scalar('test/analytical kl', analytical_cond_kl, step=i)"""
 
               tf.summary.scalar("train/lambd", lambd, step=i)
               tf.summary.scalar("train/constrain", constrain_ma, step=i)
-              
+
               tf.summary.scalar('train/actor', actor_loss, step=i)
               tf.summary.scalar('train/critic', critic_loss, step=i)
               tf.summary.scalar('train/divergence', divergence_loss, step=i)
               tf.summary.scalar('train/hook', train_hook, step=i)
               writer.flush()
-              print('batch {}: train_hook {}, actor {}, critic {}, divergence {}, lambda {}'.format(i, train_hook, actor_loss, critic_loss, divergence_loss, lambd))#, cur_mi))
+              print('batch {}: train_hook {}, actor {}, critic {}, divergence {}, lambda {}'.format(i, train_hook, actor_loss, critic_loss, divergence_loss, lambd))
 
           if (i + 1) % 2000 == 0:
               print('Testing!!!!!!!!')
@@ -251,8 +200,6 @@ def train(set_name, bbn_dim, cbn_dim, batch_size, middle_dim=1024, max_iter=1000
 
               tf.summary.scalar('test/hook', test_hook, step=i)
               if test_hook >= best_hook:
-              #if actor_loss <= best_actor:
-                #best_actor = actor_loss
                 best_hook = test_hook
                 tf.keras.models.save_model(model, filepath = save_path)
               print("test_hook: ", test_hook)
