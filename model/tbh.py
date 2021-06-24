@@ -38,17 +38,6 @@ class TBH(tf.keras.Model):
             return bbn, feat_out, dis_1, dis_2, dis_1_sample, dis_2_sample
         else:
             return bbn
-            #return (tf.sign(bbn-.5) + 1.0) / 2.0
-
-class VAE(tf.keras.Model):
-    def __init__(self, set_name, bn_dim, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.set_name = set_name
-        self.bn_dim = bn_dim
-        self.feat_dim = SET_DIM.get(set_name, 4096)
-
-        self.encoder = encodec.VaeEncoderGeco(bn_dim)
-        self.decoder = encodec.Decoder(bn_dim, self.feat_dim)
 
     def call(self, inputs, training=True, mask=None):
         feat_in = tf.cast(inputs[0][1], dtype=tf.float32)
