@@ -24,8 +24,6 @@ def custom_activation(mean, logvar, eps):
     """
     probmean = tf.exp(-mean)/(tf.exp(-mean)+1)**2
     probvar = tf.exp(-logvar)/(tf.exp(-logvar)+1)**2
-    #probvar = 2.0 / (1.0 + tf.exp(-logvar)) - 1
-    #prob = 1./2.*(tf.math.erf(mean/(tf.math.sqrt(2.)*tf.math.exp(logvar*.5)))+1.)
     
     code = eps * logvar + mean
     bbn = (tf.sign(code) + 1.0) / 2.0
@@ -37,9 +35,9 @@ def custom_activation(mean, logvar, eps):
         :param _d_prob: gradients through prob
         :return:
         """
-        d_mean = probmean*_d_code#tf.sign(_d_prob)
-        d_logvar = probvar*eps*_d_code#-code*tf.sign(_d_prob)
-        d_eps = _d_code#code
+        d_mean = probmean*_d_code
+        d_logvar = probvar*eps*_d_code
+        d_eps = _d_code
         return d_mean, d_logvar, d_eps
 
     return bbn, grad
