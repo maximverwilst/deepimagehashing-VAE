@@ -7,7 +7,6 @@ Note that the codebase is also an adapted version of the [TBH repository](https:
 ```angular2
 python=3.6
 tensorflow>=2.5
-tensorhub
 numpy
 matplotlib
 ```
