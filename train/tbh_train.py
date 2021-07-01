@@ -35,7 +35,7 @@ def reconstruction_loss(pred, origin):
 def divergent_loss(mean, logvar, eps):
   
   logpx, dependence, information, dimwise_kl, analytical_cond_kl, marginal_entropies, joint_entropy = elbo_decomposition(mean, logvar, eps, 0.)
-  return -(information + dimwise_kl + dependence)
+  return -(information + dimwise_kl + 1.5*dependence)
 
 def GECO(x, reconstruction_mu, latent_mu, latent_logsigma, z, tol):
     
@@ -115,15 +115,13 @@ def test_step(model: TBH, batch_data):
     return model_output.numpy()
 
 
-def train(set_name, bbn_dim, cbn_dim, batch_size, middle_dim=1024, max_iter=1000000, continue_path=False, continue_step=0, warmup = False):
+def train(set_name, bbn_dim, cbn_dim, batch_size, middle_dim=1024, max_iter=1000000):
     model = TBH(set_name, bbn_dim, cbn_dim, middle_dim)
-    if continue_path != False:
-      model2 = tf.keras.models.load_model(continue_path)
     
     data = Dataset(set_name=set_name, batch_size=batch_size, code_length=bbn_dim)
     
-    actor_opt = tf.keras.optimizers.Adam(1e-4)
-    critic_opt = tf.keras.optimizers.Adam(1e-4)
+    actor_opt = tf.keras.optimizers.Adam(1e-5)
+    critic_opt = tf.keras.optimizers.Adam(1e-5)
     divergence_opt = tf.keras.optimizers.Adam(1e-8)
 
     train_iter = iter(data.train_data)
@@ -151,7 +149,7 @@ def train(set_name, bbn_dim, cbn_dim, batch_size, middle_dim=1024, max_iter=1000
     lambd = 1.
     constrain_ma = 1.
     alpha = .99
-    for i in range(continue_step, max_iter):
+    for i in range(max_iter):
       with writer.as_default():
           train_batch = next(train_iter)
 

@@ -6,7 +6,6 @@ SET_SPLIT = ['train', 'test']
 SET_DIM = {'cifar10': 4096, "NETosis": 20000, "multimodal":400,"coco":2048,"2018_02_27_P103_evHeLa_4M":1280,"2018_03_16_P103_shPerk_bQ":1280}
 SET_LABEL = {'cifar10': 10, "NETosis": 2, "multimodal":1,"coco":80,"2018_02_27_P103_evHeLa_4M":1,"2018_03_16_P103_shPerk_bQ":1}
 SET_SIZE = {'cifar10': [50000, 10000], "NETosis": [27881,5577],"2018_03_16_P103_shPerk_bQ": [92577,10399], "multimodal":[1910982,213676], "coco":[10000,5000],"2018_02_27_P103_evHeLa_4M":[24948,2772]}
-#coco_all = 39533
 
 def cifar_processor(root_folder):
     class_num = 10

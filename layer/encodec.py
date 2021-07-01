@@ -16,14 +16,14 @@ class VaeEncoderGeco(tf.keras.layers.Layer):
         """
         super(VaeEncoderGeco, self).__init__()
         self.code_length = bbn_dim
-        self.fc_1 = tf.keras.layers.Dense(middle_dim, activation='gelu',kernel_constraint=tf.keras.constraints.MaxNorm(max_value=10), bias_constraint=tf.keras.constraints.MaxNorm(max_value=10))
-        self.fc_2_1 = tf.keras.layers.Dense(bbn_dim*2,kernel_constraint=tf.keras.constraints.MaxNorm(max_value=10), bias_constraint=tf.keras.constraints.MaxNorm(max_value=10))
-        self.fc_2_2 = tf.keras.layers.Dense(cbn_dim*2)# removed sigmoid activation function
+        self.fc_1 = tf.keras.layers.Dense(middle_dim, activation='gelu',kernel_constraint=tf.keras.constraints.MaxNorm(max_value=1), bias_constraint=tf.keras.constraints.MaxNorm(max_value=1))
+        self.fc_2_1 = tf.keras.layers.Dense(bbn_dim*2,kernel_constraint=tf.keras.constraints.MaxNorm(max_value=1), bias_constraint=tf.keras.constraints.MaxNorm(max_value=1))
+        self.fc_2_2 = tf.keras.layers.Dense(cbn_dim*2,kernel_constraint=tf.keras.constraints.MaxNorm(max_value=1), bias_constraint=tf.keras.constraints.MaxNorm(max_value=1))
 
-        self.reconstruction1 = tf.keras.layers.Dense(1024, activation='gelu')
-        self.reconstruction2 = tf.keras.layers.Dense(2048, activation='sigmoid')
+        self.reconstruction1 = tf.keras.layers.Dense(2048, activation='gelu',kernel_constraint=tf.keras.constraints.MaxNorm(max_value=1), bias_constraint=tf.keras.constraints.MaxNorm(max_value=1))
+        self.reconstruction2 = tf.keras.layers.Dense(4096, activation='sigmoid',kernel_constraint=tf.keras.constraints.MaxNorm(max_value=1), bias_constraint=tf.keras.constraints.MaxNorm(max_value=1))
 
-    def call(self, inputs, training=True, continuous=True, **kwargs):
+    def call(self, inputs, training=True, **kwargs):
         batch_size = tf.shape(inputs)[0]
         fc_1 = self.fc_1(inputs)
 
@@ -44,37 +44,6 @@ class VaeEncoderGeco(tf.keras.layers.Layer):
         cbn = mean2 + logvar2*self.eps2
         return bbn, cbn
 
-class Encoder(tf.keras.layers.Layer):
-    def compute_output_signature(self, input_signature):
-        pass
-
-    def __init__(self, middle_dim, bbn_dim, cbn_dim):
-        """
-
-        :param middle_dim: hidden units
-        :param bbn_dim: binary bottleneck size
-        :param cbn_dim: continuous bottleneck size
-        """
-        super(Encoder, self).__init__()
-        self.code_length = bbn_dim
-        self.fc_1 = tf.keras.layers.Dense(middle_dim, activation='relu')
-        self.fc_2_1 = tf.keras.layers.Dense(bbn_dim)
-        self.fc_2_2 = tf.keras.layers.Dense(cbn_dim, activation='sigmoid')
-
-    def call(self, inputs, training=True, **kwargs):
-        batch_size = tf.shape(inputs)[0]
-        fc_1 = self.fc_1(inputs)
-
-        bbn = self.fc_2_1(fc_1)
-        #if training:
-        #  self.eps = tf.random.uniform([batch_size, self.code_length], maxval=1)
-        #else:
-        self.eps = tf.ones([batch_size, self.code_length]) / 2.
-
-        bbn, _ = binary_activation(bbn, self.eps)
-        cbn = self.fc_2_2(fc_1)
-        return bbn, cbn
-
 
 # noinspection PyAbstractClass
 class Decoder(tf.keras.layers.Layer):
@@ -84,12 +53,14 @@ class Decoder(tf.keras.layers.Layer):
         :param feat_dim: data dim
         """
         super(Decoder, self).__init__()
-        self.fc_1 = tf.keras.layers.Dense(middle_dim, activation='gelu')
-        self.fc_2 = tf.keras.layers.Dense(feat_dim, activation='gelu')
+        self.fc_1 = tf.keras.layers.Dense(middle_dim, activation='gelu',kernel_constraint=tf.keras.constraints.MaxNorm(max_value=1), bias_constraint=tf.keras.constraints.MaxNorm(max_value=1))
+        self.fc_2 = tf.keras.layers.Dense(feat_dim, activation='gelu',kernel_constraint=tf.keras.constraints.MaxNorm(max_value=1), bias_constraint=tf.keras.constraints.MaxNorm(max_value=1))
 
     def call(self, inputs, **kwargs):
         fc_1 = self.fc_1(inputs)
         return self.fc_2(fc_1)
+
+
 
 
 if __name__ == '__main__':

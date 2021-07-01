@@ -43,10 +43,6 @@ def elbo_decomposition(mean, logvar, eps, actor_loss):
     # Compute sum of terms analytically
     # KL(q(z|x)||p(z)) = log q(z|x) - log p(z)
     analytical_cond_kl = tf.reduce_mean(- nlogqz_condx + nlogpz)
-    """print(tf.math.reduce_sum(nlogpz))
-    print(tf.math.reduce_sum(nlogqz_condx))
-    print(joint_entropy)
-    print(tf.math.reduce_sum(marginal_entropies))"""
 
     return logpx, dependence, information, dimwise_kl, analytical_cond_kl, marginal_entropies, joint_entropy
 

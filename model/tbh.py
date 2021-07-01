@@ -24,7 +24,7 @@ class TBH(tf.keras.Model):
 
     def call(self, inputs, training=True, mask=None, continuous=True):
         feat_in = tf.cast(inputs[0][1], dtype=tf.float32)
-        bbn, cbn = self.encoder(feat_in, training=training)#,continuous=continuous)
+        bbn, cbn = self.encoder(feat_in, training=training)
 
         if training:
             bn = self.tbn(bbn, cbn)
@@ -38,16 +38,3 @@ class TBH(tf.keras.Model):
             return bbn, feat_out, dis_1, dis_2, dis_1_sample, dis_2_sample
         else:
             return bbn
-
-    def call(self, inputs, training=True, mask=None):
-        feat_in = tf.cast(inputs[0][1], dtype=tf.float32)
-        bn = self.encoder(feat_in, training=training)
-
-        mean, logvar = get_mean_logvar(self.encoder, feat_in)
-
-        code =  custom_activation(mean,logvar,self.encoder.eps)
-        if training:
-            feat_out = self.decoder(bn)
-            return code, feat_out
-        else:
-            return code
