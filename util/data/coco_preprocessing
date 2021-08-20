@@ -1,0 +1,47 @@
+import tensorflow_datasets as tfds
+import tensorflow as tf
+import numpy as np
+from tensorflow.keras.preprocessing import image
+from util.data.make_data import convert_tfrecord
+
+ds = tfds.load('coco', split='train', shuffle_files=False)
+imagelist = tfds.as_numpy(ds)
+model = tf.keras.applications.ResNet152(include_top=False, input_shape=(224,224,3), pooling="avg")
+
+images, fids, labels = [], [], []
+number = 0
+leng = len(imagelist)
+print(leng)
+for step in imagelist:  
+
+    i = step["image"]
+    l = step["objects"]["label"]
+
+    i = np.array(i)
+    i = i[::2,::2,:]
+    size = 224
+    if i.shape[0]>=size:
+        if i.shape[1]>=size:
+                    
+            i = i[int((i.shape[0]-size)/2):int((i.shape[0]-size)/2+size), int((i.shape[1]-size)/2):int((i.shape[1]-size)/2+size), :]
+            i = image.img_to_array(i)
+            i = np.expand_dims(i, axis=0)
+            pr = tf.keras.applications.resnet.preprocess_input(i)
+            k = list(np.squeeze(model(pr)))
+            
+            if (len(l) != 0):
+                if(len(k)==2048):
+                    images.append(k)
+                    fids.append([number])
+                    labels.append([1 if (i in l) else 0 for i in range(91)])
+
+                    number += 1
+
+        
+print("MAKING RECORD")
+data = {}
+data['fid'] = np.array(fids,dtype="int64")
+data['feat'] = np.array(images,dtype="float32")
+data['label'] = np.array(labels,dtype="float32")
+
+convert_tfrecord(data,"coco",train)
